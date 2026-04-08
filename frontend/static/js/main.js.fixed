@@ -1,0 +1,296 @@
+document.addEventListener('DOMContentLoaded', () => {
+    const predictionForm = document.getElementById('predictionForm');
+    const resultContainer = document.getElementById('resultContainer');
+    const initialState = resultContainer.querySelector('.initial-state');
+    const loaderWrapper = resultContainer.querySelector('.loader-wrapper');
+    const predictionContent = resultContainer.querySelector('.prediction-content');
+    const heatmapContainer = document.getElementById('heatmapContainer');
+    const locationInput = document.getElementById('location');
+    const destinationInput = document.getElementById('destination');
+    const predictBtn = document.getElementById('predictBtn');
+    const saveRouteBtn = document.getElementById('saveRouteBtn');
+    const historyList = document.getElementById('historyList');
+    const favoritesList = document.getElementById('favoritesList');
+    const citySelector = document.getElementById('citySelector');
+    const apiLabel = document.getElementById('apiLabel');
+    const emergencyToggle = document.getElementById('emergencyToggle');
+    const demoToggle = document.getElementById('demoToggle');
+    const voiceToggle = document.getElementById('voiceToggle');
+    
+    let endMarker;
+    let currentZones = [];
+    let isEmergencyMode = false;
+    let isDemoMode = false;
+    let isVoiceEnabled = true;
+    let isPredictionInProgress = false; // Track prediction state
+    
+    // Voice Assistant Logic - FIXED VERSION
+    const speak = (text) => {
+        if (!isVoiceEnabled) return;
+        
+        // Cancel any ongoing speech to prevent overlapping
+        window.speechSynthesis.cancel();
+        
+        const speech = new SpeechSynthesisUtterance(text);
+        speech.rate = 1;
+        speech.pitch = 1;
+        speech.volume = 1;
+        
+        // Try to pick a natural sounding voice
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+            // Prefer English voices that sound natural
+            const preferredVoice = voices.find(v => v.lang.includes('en-US') || v.lang.includes('en-GB')) || voices[0];
+            speech.voice = preferredVoice;
+        }
+        
+        window.speechSynthesis.speak(speech);
+    };
+    
+    voiceToggle.onclick = () => {
+        isVoiceEnabled = !isVoiceEnabled;
+        if (isVoiceEnabled) {
+            voiceToggle.classList.add('active');
+            voiceToggle.classList.remove('off');
+            voiceToggle.querySelector('span').textContent = 'VOICE ON';
+            voiceToggle.querySelector('i').className = 'fas fa-volume-up';
+            speak("Voice assistant activated.");
+        } else {
+            voiceToggle.classList.remove('active');
+            voiceToggle.classList.add('off');
+            voiceToggle.querySelector('span').textContent = 'VOICE OFF';
+            voiceToggle.querySelector('i').className = 'fas fa-volume-mute';
+            window.speechSynthesis.cancel();
+        }
+    };
+    
+    // 1. SINGLE SOURCE OF TRUTH (Centralized Traffic State Manager)
+    let trafficState = { 
+        level: 'medium',   // only: low, medium, high 
+        routes: [], 
+        selectedRouteIndex: 0,
+        history: [],       // Last 5 predictions for temporal smoothing
+        confidence: 0,     // Current prediction confidence
+        stability: 'MODERATE' // HIGH, MODERATE, VOLATILE
+    };
+    
+    // Helper for Predictive Consistency (Temporal Smoothing)
+    const getStableLevel = (newLvl) => {
+        if (isDemoMode) {
+            // Lock transitions smoothly in Demo Mode
+            const levels = ['low', 'medium', 'high'];
+            const currentIndex = levels.indexOf(trafficState.level);
+            const targetIndex = levels.indexOf(newLvl);
+            
+            if (Math.abs(currentIndex - targetIndex) > 1) {
+                // Only move one step at a time for demo smoothness
+                return levels[currentIndex + (targetIndex > currentIndex ? 1 : -1)];
+            }
+            return newLvl;
+        }
+        
+        trafficState.history.push(newLvl);
+        if (trafficState.history.length > 5) trafficState.history.shift();
+        
+        const counts = {};
+        trafficState.history.forEach(l => counts[l] = (counts[l] || 0) + 1);
+        
+        return newLvl;
+    };
+    
+    // Initialize Map
+    const initMap = () => {
+        map = L.map('map').setView([22.5726, 88.3639], 13).on('click', onMapClick);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(map);
+        
+        // Add current location marker
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords;
+                    locationInput.value = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+                    speak('Current location detected');
+                    
+                    // Update map if available
+                    if (map) {
+                        map.setView([latitude, longitude], 13);
+                        if (startMarker) map.removeLayer(startMarker);
+                        if (endMarker) map.removeLayer(endMarker);
+                        
+                        startMarker = L.marker([latitude, longitude]).addTo(map);
+                        endMarker = L.marker([latitude, longitude]).addTo(map);
+                    }
+                },
+                (error) => {
+                    console.error('Geolocation error:', error);
+                    speak('Unable to get your location');
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000
+                }
+            );
+        } else {
+            speak('Geolocation not supported on this device');
+        }
+        
+        // Initialize Chart
+        trafficChart = initChart();
+        
+        // Initialize routing control
+        routingControl = L.Routing.control({
+            waypoints: [],
+            createMarker: function() { return L.marker(null, { icon: routeIcon }); },
+            lineStyle: { color: '#d4af37', weight: 6, opacity: 0.8 },
+            addWaypoints: false,
+            routeWhileDragging: false
+        }).addTo(map);
+        
+        // Load saved data
+        loadSavedData();
+        
+        // Start real-time updates
+        startRealTimeUpdates();
+        
+        // Initialize emergency mode
+        emergencyToggle.checked = false;
+        
+        // Initialize demo mode
+        demoToggle.checked = false;
+        
+        // Initialize voice assistant
+        voiceToggle.classList.add('active');
+        voiceToggle.querySelector('span').textContent = 'VOICE ON';
+        voiceToggle.querySelector('i').className = 'fas fa-volume-up';
+        
+        // Initialize personalization
+        updatePersonalizationUI();
+    };
+    
+    // Form Submission - FIXED VERSION
+    predictionForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const loc = locationInput.value;
+        const dest = destinationInput.value;
+        const day = document.getElementById('day').value;
+        const time = document.getElementById('time').value;
+        
+        // Display calculating state in metrics if elements exist
+        const metricsEl = document.getElementById('routeMetrics');
+        if (metricsEl) metricsEl.textContent = 'Calculating route...';
+        
+        const mapSynced = await syncMapWithSearch(loc, dest);
+        generateDynamicZones(loc);
+        
+        // Set prediction state - NO BLOCKING
+        isPredictionInProgress = true; 
+        initialState.classList.add('hidden');
+        predictionContent.classList.add('hidden');
+        loaderWrapper.classList.remove('hidden');
+        predictionContent.classList.remove('pulse-active');
+        
+        try {
+            const res = await fetch('/api/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ location: loc, destination: dest, day, time })
+            });
+            const data = await res.json();
+            
+            if (data.status === 'success') {
+                setTimeout(() => {
+                    loaderWrapper.classList.add('hidden');
+                    predictionContent.classList.remove('hidden');
+                    predictionContent.classList.add('pulse-active');
+                    
+                    // Normalize and Store in Central State
+                    const rawLvl = normalizeTrafficLevel(data.prediction);
+                    trafficState.level = getStableLevel(rawLvl);
+                    trafficState.confidence = parseInt(data.confidence) || 0;
+                    
+                    document.getElementById('trafficLevel').textContent = trafficState.level.toUpperCase();
+                    document.getElementById('trafficLevel').className = `traffic-status ${data.prediction}`; // Keep original casing for CSS class
+                    document.getElementById('confidenceScore').textContent = data.confidence;
+                    document.getElementById('confidenceFill').style.width = data.confidence;
+                    document.getElementById('bestTime').textContent = data.best_time;
+                    
+                    // Display distance and time in results
+                    let distance = 0;
+                    let timeEst = 0;
+                    
+                    if (trafficState.routes && trafficState.routes.length > 0) {
+                        const selected = trafficState.routes[0];
+                        distance = selected.distance;
+                        timeEst = selected.time;
+                        window.lastRouteStats = { distance, time: timeEst };
+                    }
+                    
+                    updateRouteMetricsUI(distance, timeEst);
+                    
+                    if (trafficState.routes) {
+                        updateAISuggestionUI();
+                        
+                        const bestIdx = trafficState.routes.reduce((best, r, i, arr) => r.time < arr[best].time ? i : best, 0);
+                        const highlightIdx = (trafficState.level === 'high' && trafficState.routes.length > 1) ? 1 : 0;
+                        
+                        window.highlightRoute(isEmergencyMode ? bestIdx : highlightIdx);
+                    }
+                    
+                    updateChartVisuals();
+                    animateStats();
+                    
+                    if (trafficHistory) {
+                        trafficHistory.unshift({ 
+                            location: loc, 
+                            destination: dest, 
+                            day, 
+                            time, 
+                            result: data.prediction, 
+                            distance: distance.toFixed(1),
+                            time_est: timeEst,
+                            timestamp: Date.now() 
+                        });
+                        localStorage.setItem('trafficHistory', JSON.stringify(trafficHistory));
+                        updatePersonalizationUI();
+                    }
+                    
+                    // Reset prediction state - CRITICAL FIX
+                    isPredictionInProgress = false; 
+                }, 1500);
+                
+                // VOICE ASSISTANT FIX: Only speak meaningful results
+                const shouldSpeak = (
+                    (trafficState.level === 'high' && trafficState.confidence > 75) ||  // High confidence predictions
+                    (trafficState.level === 'medium' && trafficState.confidence > 80) ||  // Medium confidence predictions  
+                    (timeEst > 45) ||  // Routes taking longer than 45 minutes
+                    (distance > 20)  // Routes longer than 20 km
+                );
+                
+                if (shouldSpeak) {
+                    let voiceMessage = "";
+                    if (isEmergencyMode) {
+                        voiceMessage = `Emergency mode active. Prioritizing fastest path via ${data.best_name}.`;
+                    } else {
+                        voiceMessage = `Traffic level is ${trafficState.level}. Recommended route is ${data.best_name}. Estimated time: ${timeEst} minutes.`;
+                    }
+                    setTimeout(() => speak(voiceMessage), 500);
+                }
+                
+                suggestEl.classList.remove('metrics-update-glow');
+                void suggestEl.offsetWidth;
+            } catch (err) {
+                loaderWrapper.classList.add('hidden');
+                initialState.classList.remove('hidden');
+                if (metricsEl) metricsEl.textContent = 'Route calculation failed';
+            }
+        });
+        
+        return true; // IMPORTANT: Always return true to prevent form blocking
+    };
+    
+    // Rest of the code remains the same...
+    // [All other functions remain unchanged]

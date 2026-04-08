@@ -1,0 +1,37 @@
+{
+  "name": "TrafficSense AI - Smart City Traffic",
+  "short_name": "TrafficSense",
+  "description": "AI-powered traffic prediction and smart city mobility solution",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#d4af37",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgdmlld0JveD0iMCAwIDE5MiAxOTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxOTIiIGhlaWdodD0iMTkyIiByeD0iMjQiIGZpbGw9IiMwYTBhMGEiLz4KPHBhdGggZD0iTTk2IDQ4QzY5LjUgNDggNDggNjkuNSA0OCA5NlM2OS41IDE0NCA5NiAxNDRTMTQ0IDExOC41IDE0NCA5NlMxMTguNSA0OCA5NiA0OFoiIGZpbGw9IiNkNGFmMzciLz4KPGNpcmNsZSBjeD0iOTYiIGN5PSI5NiIgcj0iMTYiIGZpbGw9IiMwYTBhMGEiLz4KPHN2Zz4=",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgdmlld0JveD0iMCAwIDUxMiA1MTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iNjQiIGZpbGw9IiMwYTBhMGEiLz4KPHBhdGggZD0iTTI1NiAxMjhDMTg1LjQgMTI4IDEyOCAxODUuNCAxMjggMjU2UzE4NS40IDM4NCAyNTYgMzg0UzM4NCAzMTYuNiAzODQgMjU2UzMyNi42IDEyOCAyNTYgMTI4WiIgZmlsbD0iI2Q0YWYzNyIvPgo8Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjQwIiBmaWxsPSIjMGEwYTBhIi8+Cjxzdmc+",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["navigation", "utilities", "productivity"],
+  "lang": "en",
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "screenshots": [
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjU2OCIgdmlld0JveD0iMCAwIDMyMCA1NjgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMjAiIGhlaWdodD0iNTY4IiBmaWxsPSIjMGExMWExIi8+Cjx0ZXh0IHg9IjE2MCIgeT0iMjg0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZDRhZjM3IiBmb250LXNpemU9IjI0IiBmb250LWZhbWlseT0iQXJpYWwiPlRyYWZmaWNTRW5zZSBBJTwvdGV4dD4KPHN2Zz4=",
+      "sizes": "320x568",
+      "type": "image/svg+xml",
+      "form_factor": "narrow"
+    }
+  ]
+}
