@@ -248,6 +248,66 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- Weather & Risk Cards -->
+                    <div class="weather-risk-container" id="weatherRiskContainer" style="display: none;">
+                        <div class="weather-card" data-aos="fade-up" data-aos-delay="400">
+                            <div class="weather-header">
+                                <i class="fas fa-cloud-sun"></i>
+                                <h5>Weather Conditions</h5>
+                            </div>
+                            <div class="weather-content">
+                                <div class="weather-main">
+                                    <span id="weatherCondition">--</span>
+                                    <span id="weatherTemp">--°C</span>
+                                </div>
+                                <div class="weather-details">
+                                    <div class="weather-detail">
+                                        <i class="fas fa-eye"></i>
+                                        <span id="weatherVisibility">-- km</span>
+                                    </div>
+                                    <div class="weather-detail">
+                                        <i class="fas fa-tint"></i>
+                                        <span id="weatherHumidity">--%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="weather-impact" id="weatherImpact">
+                                <span class="impact-badge">LOW IMPACT</span>
+                            </div>
+                        </div>
+                        
+                        <div class="risk-card" data-aos="fade-up" data-aos-delay="500">
+                            <div class="risk-header">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <h5>Accident Risk Assessment</h5>
+                            </div>
+                            <div class="risk-content">
+                                <div class="risk-score">
+                                    <div class="risk-circle" id="riskCircle">
+                                        <span id="riskScore">--%</span>
+                                    </div>
+                                    <div class="risk-level">
+                                        <span id="riskLevel">--</span>
+                                    </div>
+                                </div>
+                                <div class="risk-factors">
+                                    <div class="risk-factor">
+                                        <i class="fas fa-clock"></i>
+                                        <span>Time Factor</span>
+                                    </div>
+                                    <div class="risk-factor">
+                                        <i class="fas fa-cloud-rain"></i>
+                                        <span>Weather Factor</span>
+                                    </div>
+                                    <div class="risk-factor">
+                                        <i class="fas fa-calendar"></i>
+                                        <span>Day Factor</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -281,6 +341,49 @@
                 <h2><i class="fas fa-fire"></i> Localized Intensity</h2>
                 <div class="heatmap-viz" id="heatmapContainer">
                     <!-- Dynamic Rows -->
+                </div>
+            </section>
+            
+            <!-- Advanced Analytics Card -->
+            <section class="card advanced-analytics-card" data-aos="fade-right">
+                <h2><i class="fas fa-chart-bar"></i> Advanced Route Analytics</h2>
+                <div class="analytics-grid">
+                    <div class="analytics-item">
+                        <div class="analytics-icon">
+                            <i class="fas fa-tachometer-alt"></i>
+                        </div>
+                        <div class="analytics-info">
+                            <h5>Live Congestion Score</h5>
+                            <p id="liveCongestion">--%</p>
+                        </div>
+                    </div>
+                    <div class="analytics-item">
+                        <div class="analytics-icon">
+                            <i class="fas fa-hourglass-half"></i>
+                        </div>
+                        <div class="analytics-info">
+                            <h5>Avg Latency</h5>
+                            <p id="avgLatency">-- min</p>
+                        </div>
+                    </div>
+                    <div class="analytics-item">
+                        <div class="analytics-icon">
+                            <i class="fas fa-route"></i>
+                        </div>
+                        <div class="analytics-info">
+                            <h5>Route Performance</h5>
+                            <p id="routePerformance">--%</p>
+                        </div>
+                    </div>
+                    <div class="analytics-item">
+                        <div class="analytics-icon">
+                            <i class="fas fa-ambulance"></i>
+                        </div>
+                        <div class="analytics-info">
+                            <h5>Emergency Priority</h5>
+                            <p id="emergencyPriority">--</p>
+                        </div>
+                    </div>
                 </div>
             </section>
 
