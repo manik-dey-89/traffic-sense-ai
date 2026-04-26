@@ -16,12 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const emergencyToggle = document.getElementById('emergencyToggle');
     const demoToggle = document.getElementById('demoToggle');
     const voiceToggle = document.getElementById('voiceToggle');
-    
-    // New production features
-    let currentLocationCoords = null;
-    let weatherData = null;
-    let accidentRiskData = null;
-    let searchTimeout = null;
 
     let trafficChart;
     let map;
@@ -217,378 +211,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let trafficHistory = JSON.parse(localStorage.getItem('trafficHistory')) || [];
     let favoriteRoutes = JSON.parse(localStorage.getItem('favoriteRoutes')) || [];
     let userName = localStorage.getItem('trafficSenseUserName') || 'Explorer';
-    let lastUsedLocation = JSON.parse(localStorage.getItem('lastUsedLocation')) || null;
 
     // Set Welcome Name
     document.getElementById('userWelcome').textContent = `Welcome, ${userName} 👋`;
-    
-    // ✅ CURRENT LOCATION DETECTION
-    const getCurrentLocation = () => {
-        return new Promise((resolve, reject) => {
-            if (!navigator.geolocation) {
-                reject(new Error('Geolocation not supported'));
-                return;
-            }
-            
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const coords = {
-                        lat: position.coords.latitude,
-                        lon: position.coords.longitude
-                    };
-                    currentLocationCoords = coords;
-                    resolve(coords);
-                },
-                (error) => {
-                    reject(error);
-                },
-                {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 300000 // 5 minutes cache
-                }
-            );
-        });
-    };
-    
-    // ✅ REAL PLACE SEARCH WITH NOMINATIM API
-    const searchPlaces = async (query, limit = 5) => {
-        try {
-            const response = await fetch(`/api/geocode?q=${encodeURIComponent(query)}&limit=${limit}`);
-            const data = await response.json();
-            return data.results || [];
-        } catch (error) {
-            console.error('Search failed:', error);
-            return [];
-        }
-    };
-    
-    // ✅ REVERSE GEOCODING
-    const reverseGeocode = async (lat, lon) => {
-        try {
-            const response = await fetch(`/api/reverse_geocode?lat=${lat}&lon=${lon}`);
-            const data = await response.json();
-            return data.display_name || 'Unknown Location';
-        } catch (error) {
-            console.error('Reverse geocoding failed:', error);
-            return 'Unknown Location';
-        }
-    };
-    
-    // ✅ WEATHER DATA FETCHING
-    const getWeatherData = async (lat, lon) => {
-        try {
-            const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
-            const data = await response.json();
-            weatherData = data;
-            return data;
-        } catch (error) {
-            console.error('Weather fetch failed:', error);
-            return null;
-        }
-    };
-    
-    // ✅ ACCIDENT RISK CALCULATION
-    const calculateAccidentRisk = async (lat, lon, time, day) => {
-        try {
-            // This would integrate with the backend calculation
-            // For now, we'll use a simplified version
-            const hour = parseInt(time.split(':')[0]);
-            const isWeekend = ['Saturday', 'Sunday'].includes(day);
-            
-            let risk = 0.3; // Base risk
-            
-            // Time factors
-            if (hour >= 22 || hour <= 6) risk += 0.3; // Night
-            else if (hour >= 17 && hour <= 19) risk += 0.2; // Evening rush
-            else if (hour >= 7 && hour <= 9) risk += 0.15; // Morning rush
-            
-            // Weather factors
-            if (weatherData) {
-                const condition = weatherData.condition.toLowerCase();
-                if (condition.includes('rain')) risk += 0.2;
-                if (condition.includes('fog') || weatherData.visibility < 5) risk += 0.25;
-                if (condition.includes('storm')) risk += 0.3;
-            }
-            
-            // Weekend adjustment
-            if (isWeekend) risk -= 0.1;
-            
-            accidentRiskData = {
-                score: Math.min(100, Math.max(0, risk * 100)),
-                level: risk > 0.7 ? 'high' : risk > 0.4 ? 'medium' : 'low'
-            };
-            
-            return accidentRiskData;
-        } catch (error) {
-            console.error('Accident risk calculation failed:', error);
-            return { score: 30, level: 'low' };
-        }
-    };
-    
-    // ✅ AUTOCOMPLETE FUNCTIONALITY
-    const setupAutocomplete = (inputElement, type) => {
-        let resultsContainer = null;
-        
-        const createResultsContainer = () => {
-            resultsContainer = document.createElement('div');
-            resultsContainer.className = 'autocomplete-results';
-            resultsContainer.style.cssText = `
-                position: absolute;
-                top: 100%;
-                left: 0;
-                right: 0;
-                background: var(--glass-bg);
-                border: 1px solid var(--glass-border);
-                border-radius: 8px;
-                margin-top: 4px;
-                max-height: 200px;
-                overflow-y: auto;
-                z-index: 1000;
-                backdrop-filter: blur(10px);
-                display: none;
-            `;
-            inputElement.parentElement.style.position = 'relative';
-            inputElement.parentElement.appendChild(resultsContainer);
-        };
-        
-        const showResults = (results) => {
-            if (!resultsContainer) createResultsContainer();
-            
-            resultsContainer.innerHTML = '';
-            results.forEach(result => {
-                const item = document.createElement('div');
-                item.className = 'autocomplete-item';
-                item.style.cssText = `
-                    padding: 12px 16px;
-                    cursor: pointer;
-                    border-bottom: 1px solid rgba(255,255,255,0.05);
-                    transition: background 0.2s;
-                    font-size: 0.9rem;
-                    color: var(--text-primary);
-                `;
-                item.innerHTML = `
-                    <div style="font-weight: 500; margin-bottom: 2px;">${result.display_name.split(',')[0]}</div>
-                    <div style="font-size: 0.8rem; opacity: 0.7;">${result.display_name}</div>
-                `;
-                
-                item.addEventListener('mouseenter', () => {
-                    item.style.background = 'rgba(212, 175, 55, 0.1)';
-                });
-                
-                item.addEventListener('mouseleave', () => {
-                    item.style.background = 'transparent';
-                });
-                
-                item.addEventListener('click', () => {
-                    inputElement.value = result.display_name;
-                    inputElement.setAttribute('data-coords', `${result.lat},${result.lon}`);
-                    resultsContainer.style.display = 'none';
-                    
-                    // Trigger route update if both inputs have values
-                    if (locationInput.value && destinationInput.value) {
-                        updateRouteFromSearch();
-                    }
-                });
-                
-                resultsContainer.appendChild(item);
-            });
-            
-            resultsContainer.style.display = results.length > 0 ? 'block' : 'none';
-        };
-        
-        inputElement.addEventListener('input', async (e) => {
-            const query = e.target.value.trim();
-            
-            if (query.length < 2) {
-                if (resultsContainer) resultsContainer.style.display = 'none';
-                return;
-            }
-            
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(async () => {
-                const results = await searchPlaces(query);
-                showResults(results);
-            }, 300);
-        });
-        
-        // Hide results when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!inputElement.contains(e.target) && (!resultsContainer || !resultsContainer.contains(e.target))) {
-                if (resultsContainer) resultsContainer.style.display = 'none';
-            }
-        });
-    };
-    
-    // ✅ USE CURRENT LOCATION BUTTON
-    const addCurrentLocationButton = () => {
-        const locationContainer = locationInput.parentElement;
-        const currentLocationBtn = document.createElement('button');
-        currentLocationBtn.type = 'button';
-        currentLocationBtn.className = 'current-location-btn';
-        currentLocationBtn.innerHTML = '<i class="fas fa-location-arrow"></i>';
-        currentLocationBtn.title = 'Use my current location';
-        currentLocationBtn.style.cssText = `
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: var(--accent-gold);
-            border: none;
-            border-radius: 6px;
-            width: 36px;
-            height: 36px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            color: var(--bg-dark);
-            font-weight: bold;
-            transition: all 0.3s;
-            z-index: 10;
-        `;
-        
-        currentLocationBtn.addEventListener('mouseenter', () => {
-            currentLocationBtn.style.background = 'var(--accent-soft)';
-            currentLocationBtn.style.transform = 'translateY(-50%) scale(1.1)';
-        });
-        
-        currentLocationBtn.addEventListener('mouseleave', () => {
-            currentLocationBtn.style.background = 'var(--accent-gold)';
-            currentLocationBtn.style.transform = 'translateY(-50%) scale(1)';
-        });
-        
-        currentLocationBtn.addEventListener('click', async () => {
-            currentLocationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            currentLocationBtn.disabled = true;
-            
-            try {
-                const coords = await getCurrentLocation();
-                const address = await reverseGeocode(coords.lat, coords.lon);
-                
-                locationInput.value = address;
-                locationInput.setAttribute('data-coords', `${coords.lat},${coords.lon}`);
-                
-                // Update map marker
-                if (startMarker) {
-                    startMarker.setLatLng([coords.lat, coords.lon]);
-                    updateRouteFromMarkers(true);
-                }
-                
-                // Save last used location
-                localStorage.setItem('lastUsedLocation', JSON.stringify({
-                    address,
-                    coords,
-                    timestamp: Date.now()
-                }));
-                
-                // Show success feedback
-                currentLocationBtn.innerHTML = '<i class="fas fa-check"></i>';
-                setTimeout(() => {
-                    currentLocationBtn.innerHTML = '<i class="fas fa-location-arrow"></i>';
-                    currentLocationBtn.disabled = false;
-                }, 2000);
-                
-            } catch (error) {
-                console.error('Location detection failed:', error);
-                currentLocationBtn.innerHTML = '<i class="fas fa-exclamation"></i>';
-                setTimeout(() => {
-                    currentLocationBtn.innerHTML = '<i class="fas fa-location-arrow"></i>';
-                    currentLocationBtn.disabled = false;
-                }, 2000);
-            }
-        });
-        
-        locationContainer.style.position = 'relative';
-        locationContainer.appendChild(currentLocationBtn);
-    };
-    
-    // ✅ UPDATE ROUTE FROM SEARCH COORDINATES
-    const updateRouteFromSearch = async () => {
-        const startCoords = locationInput.getAttribute('data-coords');
-        const endCoords = destinationInput.getAttribute('data-coords');
-        
-        if (startCoords && endCoords) {
-            const [startLat, startLon] = startCoords.split(',').map(parseFloat);
-            const [endLat, endLon] = endCoords.split(',').map(parseFloat);
-            
-            if (startMarker && endMarker) {
-                startMarker.setLatLng([startLat, startLon]);
-                endMarker.setLatLng([endLat, endLon]);
-                updateRouteFromMarkers(true);
-            }
-            
-            // Get weather data for start location
-            await getWeatherData(startLat, startLon);
-        }
-    };
-    
-    // ✅ DISPLAY WEATHER AND RISK DATA
-    const displayWeatherAndRisk = (weather, accidentRisk) => {
-        const container = document.getElementById('weatherRiskContainer');
-        if (!container) return;
-        
-        container.style.display = 'grid';
-        
-        if (weather) {
-            document.getElementById('weatherCondition').textContent = weather.condition || 'Unknown';
-            document.getElementById('weatherTemp').textContent = `${weather.temperature || 0}°C`;
-            document.getElementById('weatherVisibility').textContent = `${weather.visibility || 0} km`;
-            document.getElementById('weatherHumidity').textContent = `${weather.humidity || 0}%`;
-            
-            const impactElement = document.getElementById('weatherImpact').querySelector('.impact-badge');
-            impactElement.textContent = `${weather.impact?.toUpperCase() || 'LOW'} IMPACT`;
-            impactElement.className = `impact-badge ${weather.impact || 'low'}`;
-        }
-        
-        if (accidentRisk) {
-            document.getElementById('riskScore').textContent = `${accidentRisk.score || 0}%`;
-            document.getElementById('riskLevel').textContent = accidentRisk.level?.toUpperCase() || 'LOW';
-            
-            // Update risk circle color based on level
-            const riskCircle = document.getElementById('riskCircle');
-            if (accidentRisk.level === 'high') {
-                riskCircle.style.background = 'conic-gradient(from 0deg, #ef4444 0deg, #ef4444 360deg)';
-            } else if (accidentRisk.level === 'medium') {
-                riskCircle.style.background = 'conic-gradient(from 0deg, #f59e0b 0deg, #f59e0b 360deg)';
-            } else {
-                riskCircle.style.background = 'conic-gradient(from 0deg, #10b981 0deg, #10b981 360deg)';
-            }
-        }
-    };
-    
-    // ✅ UPDATE ADVANCED ANALYTICS
-    const updateAdvancedAnalytics = (data) => {
-        // Calculate live congestion score based on traffic level
-        const congestionScore = trafficState.level === 'high' ? 85 : trafficState.level === 'medium' ? 55 : 25;
-        document.getElementById('liveCongestion').textContent = `${congestionScore}%`;
-        
-        // Calculate average latency (simulated based on conditions)
-        let latency = 15; // Base latency
-        if (data.weather && data.weather.condition.includes('rain')) latency += 8;
-        if (data.weather && data.weather.condition.includes('fog')) latency += 12;
-        if (data.accident_risk && data.accident_risk.level === 'high') latency += 15;
-        document.getElementById('avgLatency').textContent = `${latency} min`;
-        
-        // Route performance (inverse of congestion)
-        const routePerformance = 100 - congestionScore + Math.random() * 10;
-        document.getElementById('routePerformance').textContent = `${Math.round(routePerformance)}%`;
-        
-        // Emergency priority status
-        const emergencyStatus = isEmergencyMode ? 'ACTIVE' : (accidentRiskData?.level === 'high' ? 'STANDBY' : 'NORMAL');
-        document.getElementById('emergencyPriority').textContent = emergencyStatus;
-    };
-    
-    // Initialize autocomplete and current location
-    setupAutocomplete(locationInput, 'start');
-    setupAutocomplete(destinationInput, 'destination');
-    addCurrentLocationButton();
-    
-    // Load last used location if available and recent
-    if (lastUsedLocation && (Date.now() - lastUsedLocation.timestamp) < 300000) { // 5 minutes
-        locationInput.value = lastUsedLocation.address;
-        locationInput.setAttribute('data-coords', `${lastUsedLocation.coords.lat},${lastUsedLocation.coords.lon}`);
-    }
 
     const updateRouteMetricsUI = (distance, time) => {
         const el = document.getElementById('routeMetrics');
@@ -1296,33 +921,11 @@ document.addEventListener('DOMContentLoaded', () => {
         predictionContent.classList.remove('pulse-active');
 
         try {
-            // Get coordinates from input attributes if available
-        const startCoords = locationInput.getAttribute('data-coords');
-        const endCoords = destinationInput.getAttribute('data-coords');
-        
-        const requestData = {
-            location: loc,
-            destination: dest,
-            day,
-            time,
-            emergency_mode: isEmergencyMode
-        };
-        
-        if (startCoords) {
-            const [lat, lon] = startCoords.split(',').map(parseFloat);
-            requestData.start_coords = [lat, lon];
-        }
-        
-        if (endCoords) {
-            const [lat, lon] = endCoords.split(',').map(parseFloat);
-            requestData.end_coords = [lat, lon];
-        }
-        
-        const res = await fetch('/api/predict', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestData)
-        });
+            const res = await fetch('/api/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ location: loc, destination: dest, day, time })
+            });
             const data = await res.json();
             if (data.status === 'success') {
                 setTimeout(() => {
@@ -1340,14 +943,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('confidenceScore').textContent = data.confidence;
                     document.getElementById('confidenceFill').style.width = data.confidence;
                     document.getElementById('bestTime').textContent = data.best_time;
-                    
-                    // ✅ Display weather and risk data if available
-                    if (data.weather || data.accident_risk) {
-                        displayWeatherAndRisk(data.weather, data.accident_risk);
-                    }
-                    
-                    // ✅ Update advanced analytics
-                    updateAdvancedAnalytics(data);
                     
                     // Display distance and time in the results
                     let distance = 0;
@@ -1539,6 +1134,146 @@ document.addEventListener('DOMContentLoaded', () => {
         window.currentHighlightedIndex = index;
         originalHighlightRoute(index);
     };
+
+    // Autocomplete Search System
+    const setupAutocomplete = (inputEl, type) => {
+        let currentSuggestions = [];
+        let activeIndex = -1;
+        const dropdown = document.createElement('div');
+        dropdown.className = 'autocomplete-dropdown hidden';
+        inputEl.parentElement.appendChild(dropdown);
+
+        const debounce = (func, delay) => {
+            let timeout;
+            return (...args) => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func(...args), delay);
+            };
+        };
+
+        const fetchSuggestions = async (query) => {
+            if (query.length < 3) {
+                dropdown.classList.add('hidden');
+                return;
+            }
+
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
+                const data = await response.json();
+                currentSuggestions = data;
+                renderSuggestions(data);
+            } catch (error) {
+                console.error('Nominatim API Error:', error);
+            }
+        };
+
+        const renderSuggestions = (suggestions) => {
+            dropdown.innerHTML = '';
+            if (suggestions.length === 0) {
+                dropdown.classList.add('hidden');
+                return;
+            }
+
+            suggestions.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-item';
+                const displayName = item.display_name.split(',');
+                const name = displayName[0];
+                const region = displayName.slice(1).join(',').trim();
+
+                div.innerHTML = `
+                    <span class="autocomplete-name">${name}</span>
+                    <span class="autocomplete-region">${region}</span>
+                `;
+
+                // FIX CLICK NOT WORKING: Use mousedown to trigger selection before blur
+                div.onmousedown = (e) => {
+                    e.preventDefault();
+                    selectSuggestion(item);
+                };
+                dropdown.appendChild(div);
+            });
+
+            dropdown.classList.remove('hidden');
+            activeIndex = -1;
+        };
+
+        const selectSuggestion = (item) => {
+            // Safety Check
+            if (!item || !item.lat || !item.lon) return;
+
+            // Update Input UI
+            inputEl.value = item.display_name;
+            
+            // Store coordinates in dataset for accuracy
+            inputEl.dataset.lat = item.lat;
+            inputEl.dataset.lng = item.lon;
+
+            dropdown.innerHTML = '';
+            dropdown.classList.add('hidden');
+            
+            const lat = parseFloat(item.lat);
+            const lon = parseFloat(item.lon);
+
+            if (type === 'start') {
+                startMarker.setLatLng([lat, lon]);
+            } else {
+                endMarker.setLatLng([lat, lon]);
+            }
+
+            // Immediately update routing and map center
+            routingControl.setWaypoints([
+                startMarker.getLatLng(),
+                endMarker.getLatLng()
+            ]);
+            routingControl.route(); // FORCE UPDATE
+            
+            map.panTo([lat, lon]);
+        };
+
+        inputEl.oninput = debounce((e) => fetchSuggestions(e.target.value), 300);
+
+        // FIX DROPDOWN DISAPPEARING TOO FAST
+        inputEl.onblur = () => {
+            setTimeout(() => {
+                dropdown.classList.add('hidden');
+            }, 200);
+        };
+
+        inputEl.onkeydown = (e) => {
+            const items = dropdown.querySelectorAll('.autocomplete-item');
+            if (e.key === 'ArrowDown') {
+                activeIndex = (activeIndex + 1) % items.length;
+                updateActiveSuggestion(items);
+                e.preventDefault();
+            } else if (e.key === 'ArrowUp') {
+                activeIndex = (activeIndex - 1 + items.length) % items.length;
+                updateActiveSuggestion(items);
+                e.preventDefault();
+            } else if (e.key === 'Enter') {
+                if (activeIndex > -1) {
+                    selectSuggestion(currentSuggestions[activeIndex]);
+                    e.preventDefault();
+                }
+            } else if (e.key === 'Escape') {
+                dropdown.classList.add('hidden');
+            }
+        };
+
+        const updateActiveSuggestion = (items) => {
+            items.forEach((item, index) => {
+                if (index === activeIndex) {
+                    item.classList.add('active');
+                    item.scrollIntoView({ block: 'nearest' });
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        };
+    };
+
+    setupAutocomplete(locationInput, 'start');
+    setupAutocomplete(destinationInput, 'end');
 
     initMap();
     initChart();
