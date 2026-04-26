@@ -6,8 +6,13 @@ TrafficSense AI - Mobile Server Launcher
 This script starts the server with mobile-friendly settings.
 """
 
+import sys
+import os
 import socket
 import webbrowser
+
+# Add backend to path so we can import app
+sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 from app import app
 
 def get_local_ip():

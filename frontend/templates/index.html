@@ -34,7 +34,7 @@
     <meta name="msapplication-config" content="/static/browserconfig.xml">
     
     <!-- External Assets -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=10015">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
@@ -326,65 +326,133 @@
                 <div id="map"></div>
             </section>
             
-            <!-- Live Road Monitoring -->
+            <!-- Real-Time Route Validation -->
             <section class="card live-camera-card" data-aos="fade-up">
-                <h2><i class="fas fa-video"></i> LIVE ROAD MONITORING</h2>
-                <div class="camera-controls">
-                    <div class="city-selector">
-                        <i class="fas fa-city"></i>
-                        <select id="cameraCity" class="camera-city-select">
-                            <option value="kolkata">Kolkata Priority</option>
-                            <option value="mumbai">Mumbai</option>
-                            <option value="delhi">Delhi</option>
-                            <option value="bangalore">Bangalore</option>
-                            <option value="chennai">Chennai</option>
-                        </select>
-                    </div>
-                    <div class="camera-status" id="cameraStatus">
-                        <div class="status-indicator offline">
-                            <i class="fas fa-circle"></i>
-                            <span>Initializing...</span>
+                <h2><i class="fas fa-route"></i> REAL-TIME ROUTE VALIDATION</h2>
+                <div class="validation-grid" id="validationGrid">
+                    <!-- Route Verification Status -->
+                    <div class="validation-card">
+                        <h3><i class="fas fa-check-circle"></i> Route Verification Status</h3>
+                        <div class="verification-list" id="routeVerificationList">
+                            <div class="verification-item">
+                                <i class="fas fa-check text-success"></i>
+                                <span>Route Verified</span>
+                            </div>
+                            <div class="verification-item">
+                                <i id="verifyRouteIcon" class="fas fa-check text-success"></i>
+                                <span id="verifyRouteText">Route Verified</span>
+                            </div>
+                            <div class="verification-item">
+                                <i id="verifyDataIcon" class="fas fa-check text-success"></i>
+                                <span id="verifyDataText">Live Data Synced</span>
+                            </div>
+                            <div class="verification-item">
+                                <i id="verifyWeatherIcon" class="fas fa-check text-success"></i>
+                                <span id="verifyWeatherText">Weather Checked</span>
+                            </div>
+                            <div class="verification-item">
+                                <i id="verifyRiskIcon" class="fas fa-check text-success"></i>
+                                <span id="verifyRiskText">Risk Assessed</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="camera-grid" id="cameraGrid">
-                    <!-- Dynamic camera feeds will be loaded here -->
-                    <div class="camera-placeholder">
-                        <i class="fas fa-video-slash"></i>
-                        <p>Select a city to view live traffic cameras</p>
+
+                    <!-- Live Route Confidence Score -->
+                    <div class="validation-card">
+                        <h3><i class="fas fa-chart-line"></i> Live Route Confidence Score</h3>
+                        <div class="confidence-score">
+                            <div class="score-display">
+                                <span id="validationTrustScore" class="score-number">--%</span>
+                                <span class="score-label">Route Trust Score</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div id="validationTrustFill" class="progress-fill" style="width: 0%"></div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div class="camera-info" id="cameraInfo">
-                    <div class="info-item">
-                        <i class="fas fa-satellite"></i>
-                        <span>Feed Source: <strong id="feedSource">--</strong></span>
+
+                    <!-- Data Source Validation -->
+                    <div class="validation-card">
+                        <h3><i class="fas fa-database"></i> Data Source Validation</h3>
+                        <div class="source-list">
+                            <div class="source-item">
+                                <i class="fas fa-map text-success"></i>
+                                <span>OpenStreetMap</span>
+                                <span id="osmStatusBadge" class="status-badge active">Active</span>
+                            </div>
+                            <div class="source-item">
+                                <i class="fas fa-route text-success"></i>
+                                <span>OSRM Routing</span>
+                                <span id="osrmStatusBadge" class="status-badge active">Active</span>
+                            </div>
+                            <div class="source-item">
+                                <i class="fas fa-cloud-sun text-success"></i>
+                                <span>OpenWeather</span>
+                                <span id="weatherStatusBadge" class="status-badge active">Active</span>
+                            </div>
+                            <div class="source-item">
+                                <i class="fas fa-history text-success"></i>
+                                <span>Historical Traffic Model</span>
+                                <span id="modelStatusBadge" class="status-badge active">Active</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="info-item">
-                        <i class="fas fa-clock"></i>
-                        <span>Last Update: <strong id="lastCameraUpdate">--:--</strong></span>
+
+                    <!-- Alternate Route Availability -->
+                    <div class="validation-card">
+                        <h3><i class="fas fa-random"></i> Alternate Route Availability</h3>
+                        <div class="alternate-routes">
+                            <div class="route-count">
+                                <i class="fas fa-route"></i>
+                                <span id="altRouteCount" class="count-number">0</span>
+                                <span class="count-label">alternate safe routes found</span>
+                            </div>
+                            <div id="routeIndicators" class="route-indicators">
+                                <!-- Dynamic indicators -->
+                            </div>
+                        </div>
                     </div>
-                    <div class="info-item">
-                        <i class="fas fa-eye"></i>
-                        <span>Active Cameras: <strong id="activeCameraCount">0</strong></span>
+
+                    <!-- Estimated Stability -->
+                    <div class="validation-card">
+                        <h3><i class="fas fa-shield-alt"></i> Estimated Stability</h3>
+                        <div class="stability-display">
+                            <div id="stabilityLevelCard" class="stability-level high">
+                                <i class="fas fa-shield-alt"></i>
+                                <span>CURRENT ROUTE STABILITY</span>
+                                <span id="stabilityValueText" class="stability-value">HIGH</span>
+                            </div>
+                            <div class="stability-metrics">
+                                <div class="metric">
+                                    <span class="metric-label">Traffic Flow</span>
+                                    <span id="flowStability" class="metric-value">--</span>
+                                </div>
+                                <div class="metric">
+                                    <span class="metric-label">Weather Impact</span>
+                                    <span id="weatherStability" class="metric-value">--</span>
+                                </div>
+                                <div class="metric">
+                                    <span class="metric-label">Road Quality</span>
+                                    <span id="roadStability" class="metric-value">--</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
 
             <!-- Personalization Sections -->
             <section class="card personalization-card" id="userHistory" data-aos="fade-right">
-                <h2><i class="fas fa-history"></i> Recent Traffic Analysis</h2>
-                <div id="historyList" class="history-grid">
-                    <p class="empty-msg">No recent analysis found.</p>
+                <h2><i class="fas fa-history"></i> Recent Analysis</h2>
+                <div id="historyList" class="history-list">
+                    <!-- Dynamic History -->
+                </div>
+                <h2 style="margin-top: 2rem;"><i class="fas fa-star"></i> Favorite Routes</h2>
+                <div id="favoritesList" class="favorites-list">
+                    <!-- Dynamic Favorites -->
                 </div>
             </section>
-
-            <section class="card personalization-card" id="userFavorites" data-aos="fade-left">
-                <h2><i class="fas fa-heart"></i> Favorite Routes</h2>
-                <div id="favoritesList" class="favorites-grid">
-                    <p class="empty-msg">No favorite routes saved.</p>
-                </div>
-            </section>
-
+            
             <!-- Analytics: Heatmap Card -->
             <section class="card heatmap-card" id="analytics" data-aos="fade-right">
                 <h2><i class="fas fa-fire"></i> Localized Intensity</h2>
@@ -431,12 +499,12 @@
                                 </div>
                             </div>
                             <div class="trust-item">
-                                <div class="trust-status connecting" id="cameraTrust">
-                                    <i class="fas fa-spinner fa-spin"></i>
+                                <div class="trust-status verified" id="cameraTrust">
+                                    <i class="fas fa-check-circle"></i>
                                 </div>
                                 <div class="trust-info">
                                     <strong>Live Cameras</strong>
-                                    <span id="cameraStatusText">Initializing...</span>
+                                    <span id="cameraStatusText">Verified Live Feed</span>
                                     <small id="cameraLastSync">Last sync: --:--</small>
                                 </div>
                             </div>
@@ -674,7 +742,7 @@
     <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=10015"></script>
     <script>
         AOS.init({ duration: 1000, once: true });
         

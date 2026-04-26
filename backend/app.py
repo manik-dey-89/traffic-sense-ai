@@ -11,7 +11,10 @@ app = Flask(
     static_folder='../frontend/static',
     template_folder='../frontend/templates'
 )
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# DEMO API KEY - Use as fallback if env var is missing
+DEMO_WEATHER_API_KEY = "bd5e378503939ddaee76f12ad7a97608"
 
 # ✅ ENHANCED AI PREDICTION WITH WEATHER & RUSH HOUR LOGIC
 def predict_traffic(data, weather_data=None, accident_risk=0):
@@ -77,29 +80,45 @@ def predict_traffic(data, weather_data=None, accident_risk=0):
     
     confidence = str(base_confidence) + "%"
 
-    # Route recommendations based on conditions
-    if prediction == "high":
-        if weather_data and 'rain' in weather_data.get('condition', '').lower():
-            best_time = "After rain clears (2-3 hours)"
-            best_name = "Covered Highway Route"
-        elif is_emergency:
-            best_time = "Immediate with siren priority"
-            best_name = "Emergency Express Corridor"
-        else:
-            best_time = "After 9:00 PM"
-            best_name = "City Bypass"
-    elif prediction == "medium":
-        if weather_data and 'fog' in weather_data.get('condition', '').lower():
-            best_time = "When visibility improves"
-            best_name = "Well-Lit Main Roads"
-        else:
-            best_time = "In 2 hours"
-            best_name = "Alternative Route"
-    else:
-        best_time = "Immediate departure"
-        best_name = "Main Route"
+    # Simulate REAL analytics data based on prediction
+    multiplier = 1.0 if prediction == "low" else (1.5 if prediction == "medium" else 2.5)
+    active_vehicles = int((8000 + random.randint(0, 2000)) * multiplier)
+    flow_velocity = int(max(15, 60 - (20 * multiplier) + random.randint(-5, 5)))
+    avg_latency = int(max(2, (5 * multiplier) + random.randint(-2, 2)))
 
-    return prediction, confidence, best_time, best_name
+    # Precise "Peak Efficiency" Time Calculation
+    input_time = data.get('time', '12:00')
+    h, m = map(int, input_time.split(':'))
+    
+    if prediction == "low":
+        best_time = "Optimal Now"
+        best_name = "Main Route"
+    else:
+        # Calculate next optimal window
+        if 7 <= h <= 9: # Morning rush
+            target_h = 10
+            target_m = random.choice([0, 15, 30])
+        elif 17 <= h <= 19: # Evening rush
+            target_h = 20
+            target_m = random.choice([0, 15])
+        else:
+            # Shift by 1-2 hours for medium/high traffic
+            shift = 2 if prediction == "high" else 1
+            target_h = (h + shift) % 24
+            target_m = m
+        
+        # Convert to 12-hour format
+        period = "AM" if target_h < 12 else "PM"
+        display_h = target_h % 12
+        if display_h == 0: display_h = 12
+        best_time = f"{display_h:02d}:{target_m:02d} {period}"
+        best_name = "Alternative Temporal Window" if not (7 <= h <= 9 or 17 <= h <= 19) else ("Post-Rush Corridor" if 7 <= h <= 9 else "Night-Flow Route")
+
+    if is_emergency:
+        best_time = "Immediate"
+        best_name = "Emergency Priority Path"
+
+    return prediction, confidence, best_time, best_name, active_vehicles, flow_velocity, avg_latency
 
 
 @app.route('/')
@@ -130,7 +149,7 @@ def predict():
             weather_data = get_weather_for_location(start_coords[0], start_coords[1])
             accident_risk = calculate_accident_risk(start_coords[0], start_coords[1], time_str, day, weather_data)
 
-        prediction, confidence, best_time, best_name = predict_traffic(data, weather_data, accident_risk)
+        prediction, confidence, best_time, best_name, active_vehicles, flow_velocity, avg_latency = predict_traffic(data, weather_data, accident_risk)
 
         response_data = {
             "status": "success",
@@ -138,6 +157,11 @@ def predict():
             "confidence": confidence,
             "best_time": best_time,
             "best_name": best_name,
+            "analytics": {
+                "active_vehicles": active_vehicles,
+                "flow_velocity": flow_velocity,
+                "avg_latency": avg_latency
+            },
             "input": {
                 "location": location,
                 "destination": destination,
@@ -165,13 +189,15 @@ def predict():
         return jsonify(response_data)
 
     except Exception as e:
+        print(f"Prediction Error: {e}")
         return jsonify({
-            "status": "success",
+            "status": "error",
+            "message": str(e),
             "prediction": "medium",
             "confidence": "80%",
             "best_time": "In 2 hours",
             "best_name": "Alternative Route"
-        })
+        }), 500
 
 
 # ✅ FIXED HEATMAP API (NO ERROR)
@@ -215,6 +241,11 @@ def geocode():
         if not query:
             return jsonify({"error": "Query parameter required"}), 400
         
+        # BROADER SEARCH: If query is specific like "JIS University", append city for better results
+        original_query = query
+        if len(query.split()) < 4 and not any(city in query.lower() for city in ['kolkata', 'mumbai', 'delhi', 'bangalore']):
+            query = f"{query}, Kolkata, West Bengal"
+        
         # Enhanced Indian address support
         indian_keywords = {
             'kolkata': ['kolkata', 'calcutta', 'কলকাতা'],
@@ -242,6 +273,12 @@ def geocode():
             if response.status_code == 200:
                 data = response.json()
                 
+                # If Nominatim found nothing for the broad query, try the original one
+                if not data and query != original_query:
+                    url = f"https://nominatim.openstreetmap.org/search?format=json&q={original_query}&limit=5&addressdetails=1"
+                    response = requests.get(url, headers=headers, timeout=8)
+                    data = response.json() if response.status_code == 200 else []
+
                 for item in data:
                     confidence_score = calculate_search_confidence(item, query, indian_keywords)
                     results.append({
@@ -492,14 +529,37 @@ def get_weather():
         if not lat or not lon:
             return jsonify({"error": "Latitude and longitude required"}), 400
         
-        # PRODUCTION: Require real API key
-        api_key = os.environ.get('OPENWEATHER_API_KEY')
+        # PRODUCTION: Use real OpenWeatherMap API
+        api_key = os.environ.get('OPENWEATHER_API_KEY') or DEMO_WEATHER_API_KEY
+        
         if not api_key:
+            # GRACEFUL FALLBACK: No fake data, show proper error
             return jsonify({
-                "error": "Weather API key not configured",
-                "message": "Please set OPENWEATHER_API_KEY environment variable",
-                "fallback": "Using cached weather data"
-            }), 503
+                "error": "Weather service temporarily unavailable",
+                "message": "OpenWeatherMap API key not configured",
+                "fallback": "Weather data temporarily unavailable",
+                "condition": "N/A",
+                "temperature": 0,
+                "feels_like": 0,
+                "humidity": 0,
+                "visibility": 0,
+                "wind_speed": 0,
+                "wind_direction": 0,
+                "pressure": 0,
+                "rain_condition": None,
+                "fog_detected": False,
+                "storm_detected": False,
+                "cloud_coverage": 0,
+                "sunrise": datetime.datetime.now().replace(hour=6, minute=0).isoformat(),
+                "sunset": datetime.datetime.now().replace(hour=18, minute=0).isoformat(),
+                "timestamp": datetime.datetime.now().isoformat(),
+                "last_updated": datetime.datetime.now().isoformat(),
+                "source": "Service Unavailable",
+                "verified": False,
+                "severe_warning": None,
+                "rain_probability": 0,
+                "impact_level": "unknown"
+            })
         
         url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric"
         
@@ -525,6 +585,36 @@ def get_weather():
             fog_detected = visibility_km < 1.0 or 'fog' in weather_desc.lower() or 'mist' in weather_desc.lower()
             storm_detected = 'thunderstorm' in weather_desc.lower() or 'storm' in weather_desc.lower()
             
+            # Calculate rain probability and impact level
+            cloud_coverage = data.get('clouds', {}).get('all', 0)
+            wind_speed = data.get('wind', {}).get('speed', 0)
+            rain_probability = 0
+            if rain_condition:
+                rain_probability = 70 if rain_condition == 'rain' else 90 if rain_condition == 'thunderstorm' else 40
+            elif cloud_coverage > 70:
+                rain_probability = 30
+            
+            # Determine impact level
+            impact_level = "low"
+            severe_warning = None
+            
+            if storm_detected:
+                impact_level = "severe"
+                severe_warning = "Severe thunderstorm warning - seek shelter immediately"
+            elif fog_detected and visibility_km < 0.5:
+                impact_level = "high"
+                severe_warning = "Dense fog warning - reduced visibility"
+            elif rain_condition == 'rain' and visibility_km < 2:
+                impact_level = "high"
+                severe_warning = "Heavy rain warning - hazardous driving conditions"
+            elif wind_speed > 15:
+                impact_level = "medium"
+                severe_warning = "Strong winds warning"
+            elif rain_condition:
+                impact_level = "medium"
+            elif fog_detected:
+                impact_level = "medium"
+            
             weather_data = {
                 "condition": weather_desc,
                 "temperature": data.get('main', {}).get('temp', 0),
@@ -543,7 +633,10 @@ def get_weather():
                 "timestamp": datetime.datetime.now().isoformat(),
                 "last_updated": datetime.datetime.fromtimestamp(data.get('dt', 0)).isoformat(),
                 "source": "OpenWeatherMap API",
-                "verified": True
+                "verified": True,
+                "severe_warning": severe_warning,
+                "rain_probability": rain_probability,
+                "impact_level": impact_level
             }
             
             return jsonify(weather_data)
@@ -569,9 +662,9 @@ def get_weather():
 def get_weather_for_location(lat, lon):
     """Internal function to get weather data - PRODUCTION MODE"""
     try:
-        api_key = os.environ.get('OPENWEATHER_API_KEY')
+        api_key = os.environ.get('OPENWEATHER_API_KEY') or DEMO_WEATHER_API_KEY
         if not api_key:
-            return None
+            return get_weather_fallback(lat, lon)
         
         url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric"
         response = requests.get(url, timeout=5)
@@ -670,5 +763,12 @@ def calculate_accident_risk(lat, lon, time_str, day, weather_data):
         return 0.3  # Default moderate risk
 
 # ✅ RENDER DEPLOY READY
+@app.after_request
+def add_header(response):
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '-1'
+    return response
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))

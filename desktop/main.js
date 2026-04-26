@@ -30,7 +30,14 @@ function createWindow() {
   });
 
   // Load the app
-  mainWindow.loadFile(path.join(__dirname, '../frontend/templates/index.html'));
+  const loadURL = () => {
+    mainWindow.loadURL('http://localhost:5000').catch(() => {
+      // Retry after a short delay if server isn't ready
+      setTimeout(loadURL, 500);
+    });
+  };
+  
+  loadURL();
 
   // Open DevTools in development
   if (process.env.NODE_ENV === 'development') {
